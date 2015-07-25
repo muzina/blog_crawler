@@ -1,0 +1,57 @@
+#!/usr/bin/perl --
+
+###############################################################
+#新着論文レビューをクローリングしてHTML1 ページにするスクリプト
+###############################################################
+
+##エンコード設定
+use utf8;
+use Encode;
+my $enc_os = 'cp932';
+binmode STDIN, ":encoding($enc_os)";
+binmode STDOUT, ":encoding($enc_os)";
+binmode STDERR, ":encoding($enc_os)";
+
+##モジュール
+use LWP::Simple qw/$ua get/;
+$ua=LWP::UserAgent->new(agent => 'user agent');
+my $mae="null";
+my $ato="null";
+my $hit="null";
+if (!open(ALL_HTML,">>:encoding($enc_os)","all_first_author.html")) { &error(bad_file); }
+print ALL_HTML "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
+
+##記事一覧取得
+my $list_src=get("http\:\/\/first\.lifesciencedb\.jp\/allposts");
+($mae,$ato)=split(/\<div id\=\"contentleft\"\>/,$list_src);
+($hit,$ato)=split(/\<div style\=\"float\: right\; margin-left\: 10px\;\"\>/,$ato);
+print ALL_HTML "$hit\n";#目次ページとする
+
+##個別記事取得
+my @article_urls=split(/\<li class\=\"post\-item post\-item\-/,$hit);
+my $article_count=@article_urls;
+my $count=1;
+my $article_num=0;
+my $article_parts="null";
+while($count<=$article_count){#記事の切り出し
+ ($article_num,$ato)=split(/\"\>\<a href\=\"http\:\/\/first\.lifesciencedb\.jp\/archives\//,
+ $article_urls[$count]);
+ my $url="http\:\/\/first\.lifesciencedb\.jp\/archives\/"."$article_num";
+ my $article_src=get($url);
+ $article_src=~s/\"\/wp-content\/uploads\//\"http\:\/\/first\.lifesciencedb\.jp\/wp\-
+ content\/uploads\//g;#画像の相対パスを絶対パスに変更
+ $article_src=~s/\.png/\.jpg/g;#png サムネイル画像をリンク先の大画像に変える
+ $article_src=~s/width\=\"200px\"/width\=\"800px\"/g;#サムネイル画像を大きくする
+ ($mae,$ato)=split(/\<div id\=\"contentleft\"\>/,$article_src);
+ ($article_parts,$ato)=split(/\<div style\=\"float\: right\; margin\-left\: 10px\;">/,$ato);
+ print ALL_HTML "$article_parts\n\<HR\>\n\n";
+ print "$count articles finished\n";
+ $count++;
+ sleep 1;#1 秒待つ
+}
+
+print ALL_HTML "</BODY>\n</HTML>\n";
+close(ALL_HTML);
+print "ALL PROCESS FINISHED!";
+`PAUSE`;
+exit;
