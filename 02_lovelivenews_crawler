@@ -1,0 +1,100 @@
+#!/usr/bin/perl -
+
+################################################
+#ラブライブ！ニュースダウンローダ
+################################################
+
+#初期設定いろいろ
+##エンコード設定
+use utf8;
+use Encode;
+my $enc_os = 'cp932';
+binmode STDIN, ":encoding($enc_os)";
+binmode STDOUT, ":encoding($enc_os)";
+binmode STDERR, ":encoding($enc_os)";
+
+##ダウンロード設定
+use LWP::Simple qw/$ua get/;
+$ua=LWP::UserAgent->new(agent=>'user agent');
+
+##日時設定
+my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst)=localtime();
+$year+=1900;
+$mon++;
+$mon = sprintf("%02d",$mon);
+$mday = sprintf("%02d",$mday);
+
+##変数設定
+my $base_url='http://news.lovelive-anime.jp/app-def/S-102/news/';
+my @error_array="null";
+my $bulk1="null";
+my $bulk2="null";
+my $max_page="null";
+my $current_page=1;
+my $article_count=1;
+
+my $all_page_get="yes";
+
+#最初にトップページにアクセスし全ページ数を確認
+my $toppage_source=get($base_url);
+chomp($toppage_source);
+if ($toppage_source=~/Page 1 of /){
+ $bulk1=$';
+ ($max_page,$bulk2)=split(/\<\/div\>\<span class\=\'page\-numbers current\'\>/,$bulk1);
+print "最大ページ数は$max_page\n";
+}else{
+print "最大ページ数が取得できません\n";
+push @error_array, "error1";
+}
+
+#$max_page=2;#テスト用
+
+#メインルーチン
+if(!open(NEWS,">>:encoding($enc_os)","LoveLiveNews\_$year$mon$mday\.csv")) {die("error :$!");}
+print NEWS "number\,title\,date\,contains\,url\n";
+
+while($current_page<$max_page){
+
+ ##ページ内の解析
+ my $current_url="$base_url"."\?paged\="."$current_page";
+ my $current_source=get($current_url);
+ chomp($current_source);
+ $current_source=~s/\,/、/g;
+ $current_source=~s/\;/ /g;
+ $current_source=~s/\t/ /g;
+ $current_source=~s/\n/ /g;
+ $current_source=~s/\r/ /g;
+ $current_source=~s/\&nbsp//g;
+ $current_source=~s/\&hellip//g;
+ $current_source=~s/\&raquo//g;
+ $current_source=~s/\&\#8217/\'/g;
+ Encode::encode('shift_jis', decode_utf8($current_source));
+# $current_source=~s/\x{000d}\x{000a}$|\x{000d}$|\x{000a}$//g;
+ $current_source=~s/[\r\n]+\z//;
+ ($bulk1,$current_source)=split(/\<\!\-\- end sidebar \-\-\>/,$current_source);
+ ($current_source,$bulk1)=split(/\<\!\-\- begin footer \-\->/,$current_source);
+ my @articles=split(/\<div class\=\"kiji\_header\"\>\<h2\>/,$current_source);
+ my $max_article=@articles-1;
+ my $current_article=1;
+ my $title="null";
+ my $date="null";
+ my $body="null";
+
+ ##記事の取得
+ while($current_article<=$max_article){
+  ($title,$bulk1)=split(/\<\/h2\>\<\/div\>/,$articles[$current_article]);
+  ($bulk2,$bulk1)=split(/\<div class\=\"meta\"\>\<div class\=\"date\"\>/,$bulk1);
+  ($date,$body)=split(/\<\/div\>\<\/div\>\<div class\=\"entry\"\>\<p\>/,$bulk1);
+  $body=~s/<.*?>//g; ; 
+  print NEWS "$article_count\,$title\,$date\,$body,$current_url\n";
+  $article_count++;
+  $current_article++;
+ }
+
+ $current_page++;
+ sleep 1; #1秒待つ
+}
+
+close(NEWS);
+print "FINISH";
+#`PAUSE`;
